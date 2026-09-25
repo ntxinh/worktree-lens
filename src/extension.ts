@@ -110,7 +110,7 @@ export function activate(context: vscode.ExtensionContext): void {
     for (const p of want) {
       if (!watchers.has(p)) {
         const w = vscode.workspace.createFileSystemWatcher(
-          new vscode.RelativePattern(vscode.Uri.file(p), '*'),
+          new vscode.RelativePattern(p, '*'),
         );
         w.onDidCreate(debouncedRefresh);
         w.onDidDelete(debouncedRefresh);
@@ -160,72 +160,72 @@ async function addWorktreeCmd(
   node?: RepoNode,
 ): Promise<void> {
   const git = api.git.path;
-  let repo = node?.repo;
-  if (!repo) {
-    const repos = await discoverRepos(api);
-    if (repos.length === 0) return;
-    repo =
-      repos.length === 1
-        ? repos[0]
-        : (
-            await vscode.window.showQuickPick(
-              repos.map((r) => ({ label: r.name, repo: r })),
-              { placeHolder: 'Repository for the new worktree' },
-            )
-          )?.repo;
-    if (!repo) return;
-  }
-  const main = repo.mainPath;
-
-  // Branch quick pick — omit branches already checked out in any worktree.
-  const entries = await g.listWorktrees(git, main);
-  const checkedOut = new Set(entries.flatMap((e) => (e.branch ? [e.branch] : [])));
-  const { local, remote } = await g.listBranches(git, main);
-  type Pick = vscode.QuickPickItem & { isNew?: boolean; branch?: string };
-  const items: Pick[] = [{ label: '$(add) Create new branch…', isNew: true }];
-  for (const b of local) if (!checkedOut.has(b)) items.push({ label: b, branch: b });
-  for (const r of remote) {
-    const short = r.slice(r.indexOf('/') + 1); // show 'origin/x', pass 'x' to git
-    if (!local.includes(short) && !checkedOut.has(short)) {
-      items.push({ label: r, branch: short });
-    }
-  }
-  const pick = await vscode.window.showQuickPick(items, {
-    placeHolder: 'Branch for the new worktree',
-  });
-  if (!pick) return;
-
-  let branch: string;
-  let isNew = false;
-  if (pick.isNew) {
-    const name = await vscode.window.showInputBox({ prompt: 'New branch name' });
-    if (!name) return;
-    branch = name;
-    isNew = true;
-  } else {
-    branch = pick.branch!;
-  }
-
-  // Location quick pick — skipped when no source folder exists (only Default).
-  const template = cfg().get('pathTemplate', '../${repo}.worktrees/${branch}');
-  const candidates = await g.addLocationCandidates(repo.name, main, template, branch);
-  let chosen = candidates[0].wtPath;
-  if (candidates.length > 1) {
-    const loc = await vscode.window.showQuickPick(
-      candidates.map((c) => ({ label: c.label, description: c.wtPath })),
-      { placeHolder: 'Worktree location' },
-    );
-    if (!loc) return;
-    chosen = loc.description!;
-  }
-  const input = await vscode.window.showInputBox({
-    prompt: 'Worktree path, resolved relative to the main worktree',
-    value: chosen,
-  });
-  if (!input) return;
-  const target = path.resolve(main, input);
-
   try {
+    let repo = node?.repo;
+    if (!repo) {
+      const repos = await discoverRepos(api);
+      if (repos.length === 0) return;
+      repo =
+        repos.length === 1
+          ? repos[0]
+          : (
+              await vscode.window.showQuickPick(
+                repos.map((r) => ({ label: r.name, repo: r })),
+                { placeHolder: 'Repository for the new worktree' },
+              )
+            )?.repo;
+      if (!repo) return;
+    }
+    const main = repo.mainPath;
+
+    // Branch quick pick — omit branches already checked out in any worktree.
+    const entries = await g.listWorktrees(git, main);
+    const checkedOut = new Set(entries.flatMap((e) => (e.branch ? [e.branch] : [])));
+    const { local, remote } = await g.listBranches(git, main);
+    type Pick = vscode.QuickPickItem & { isNew?: boolean; branch?: string };
+    const items: Pick[] = [{ label: '$(add) Create new branch…', isNew: true }];
+    for (const b of local) if (!checkedOut.has(b)) items.push({ label: b, branch: b });
+    for (const r of remote) {
+      const short = r.slice(r.indexOf('/') + 1); // show 'origin/x', pass 'x' to git
+      if (!local.includes(short) && !checkedOut.has(short)) {
+        items.push({ label: r, branch: short });
+      }
+    }
+    const pick = await vscode.window.showQuickPick(items, {
+      placeHolder: 'Branch for the new worktree',
+    });
+    if (!pick) return;
+
+    let branch: string;
+    let isNew = false;
+    if (pick.isNew) {
+      const name = await vscode.window.showInputBox({ prompt: 'New branch name' });
+      if (!name) return;
+      branch = name;
+      isNew = true;
+    } else {
+      branch = pick.branch!;
+    }
+
+    // Location quick pick — skipped when no source folder exists (only Default).
+    const template = cfg().get('pathTemplate', '../${repo}.worktrees/${branch}');
+    const candidates = await g.addLocationCandidates(repo.name, main, template, branch);
+    let chosen = candidates[0].wtPath;
+    if (candidates.length > 1) {
+      const loc = await vscode.window.showQuickPick(
+        candidates.map((c) => ({ label: c.label, description: c.wtPath })),
+        { placeHolder: 'Worktree location' },
+      );
+      if (!loc) return;
+      chosen = loc.description!;
+    }
+    const input = await vscode.window.showInputBox({
+      prompt: 'Worktree path, resolved relative to the main worktree',
+      value: chosen,
+    });
+    if (!input) return;
+    const target = path.resolve(main, input);
+
     if (isNew) {
       const base = (await g.resolveBase(git, main)) ?? 'HEAD';
       await g.addWorktree(git, main, target, { newBranch: branch, base });
