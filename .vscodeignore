@@ -1,0 +1,13 @@
+.vscode/**
+src/**
+test/**
+docs/**
+node_modules/**
+out/test/**
+*.map
+.gitignore
+.editorconfig
+tsconfig.json
+mise.toml
+Makefile
+AGENTS.md

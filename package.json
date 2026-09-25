@@ -1,0 +1,158 @@
+{
+  "name": "worktree-lens",
+  "displayName": "Worktree Lens",
+  "description": "All Git worktree actions one click away in a Source Control tree view, with at-a-glance status per worktree.",
+  "version": "0.1.0",
+  "publisher": "exodia",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "extensionDependencies": [
+    "vscode.git"
+  ],
+  "categories": [
+    "SCM Providers"
+  ],
+  "main": "./out/src/extension.js",
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "test": "tsc -p . && node --test out/test/git.test.js",
+    "vscode:prepublish": "tsc -p ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.5.0"
+  },
+  "contributes": {
+    "views": {
+      "scm": [
+        {
+          "id": "worktreeLens",
+          "name": "Worktrees"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "worktreeLens",
+        "contents": "No Git repositories open."
+      }
+    ],
+    "configuration": {
+      "title": "Worktree Lens",
+      "properties": {
+        "worktreeLens.pathTemplate": {
+          "type": "string",
+          "default": "../${repo}.worktrees/${branch}",
+          "description": "Default location for new worktrees, relative to the main worktree. ${repo} = repository name, ${branch} = branch name with '/' replaced by '-'."
+        },
+        "worktreeLens.groupBySource": {
+          "type": "boolean",
+          "default": true,
+          "description": "Group worktrees from agent source folders (e.g. .claude/worktrees) under one node per folder. Off = flat list with a source tag."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "worktreeLens.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "worktreeLens.add",
+        "title": "Add Worktree",
+        "icon": "$(add)"
+      },
+      {
+        "command": "worktreeLens.open",
+        "title": "Open Worktree",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "worktreeLens.openNewWindow",
+        "title": "Open Worktree in New Window",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "worktreeLens.remove",
+        "title": "Remove Worktree",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "worktreeLens.viewAsTree",
+        "title": "View as Tree",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "worktreeLens.viewAsList",
+        "title": "View as List",
+        "icon": "$(list-flat)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "worktreeLens.add",
+          "when": "view == worktreeLens",
+          "group": "navigation"
+        },
+        {
+          "command": "worktreeLens.refresh",
+          "when": "view == worktreeLens",
+          "group": "navigation"
+        },
+        {
+          "command": "worktreeLens.viewAsList",
+          "when": "view == worktreeLens && config.worktreeLens.groupBySource",
+          "group": "navigation"
+        },
+        {
+          "command": "worktreeLens.viewAsTree",
+          "when": "view == worktreeLens && !config.worktreeLens.groupBySource",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "worktreeLens.add",
+          "when": "view == worktreeLens && viewItem == repo",
+          "group": "inline"
+        },
+        {
+          "command": "worktreeLens.open",
+          "when": "view == worktreeLens && viewItem =~ /^worktree(\\.main|\\.current|\\.orphan)?$/",
+          "group": "inline"
+        },
+        {
+          "command": "worktreeLens.openNewWindow",
+          "when": "view == worktreeLens && viewItem =~ /^worktree(\\.main|\\.current|\\.orphan)?$/",
+          "group": "inline"
+        },
+        {
+          "command": "worktreeLens.remove",
+          "when": "view == worktreeLens && viewItem =~ /^worktree(\\.missing|\\.orphan)?$/",
+          "group": "inline"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "worktreeLens.open",
+          "when": "false"
+        },
+        {
+          "command": "worktreeLens.openNewWindow",
+          "when": "false"
+        },
+        {
+          "command": "worktreeLens.remove",
+          "when": "false"
+        }
+      ]
+    }
+  }
+}
