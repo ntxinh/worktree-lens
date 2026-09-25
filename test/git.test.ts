@@ -202,3 +202,73 @@ test('pruneWorktrees: prunes worktree whose folder was deleted', async (t) => {
   entries = await g.listWorktrees(GIT, main);
   assert.equal(entries.length, 1);
 });
+
+test('classifySource: five source folders, own worktrees, main worktree', async (t) => {
+  const main = makeRepo(t);
+  for (const s of g.SOURCE_FOLDERS) {
+    assert.equal(g.classifySource(main, path.join(main, s.folder, 'x'))?.folder, s.folder);
+  }
+  // nested registered path still classifies under its source
+  assert.equal(
+    g.classifySource(main, path.join(main, '.codex/worktrees/abc/repo'))?.folder,
+    '.codex/worktrees',
+  );
+  // own worktrees — including ../repo.worktrees/x which must NOT match '.worktrees'
+  assert.equal(g.classifySource(main, path.join(path.dirname(main), 'repo.worktrees', 'x')), undefined);
+  assert.equal(g.classifySource(main, '/elsewhere/x'), undefined);
+  // main worktree has no source
+  assert.equal(g.classifySource(main, main), undefined);
+});
+
+test('findUnregistered: flags orphans, spares registered and nested parents', async (t) => {
+  const main = makeRepo(t);
+  const claudeDir = path.join(main, '.claude/worktrees');
+  const codexDir = path.join(main, '.codex/worktrees');
+
+  // registered worktrees inside source folders
+  const wtClaude = path.join(claudeDir, 'reg');
+  fs.mkdirSync(claudeDir, { recursive: true });
+  git(main, 'worktree', 'add', '-b', 'claude-wt', wtClaude);
+  const wtNested = path.join(codexDir, 'abc', 'repo');
+  fs.mkdirSync(path.dirname(wtNested), { recursive: true });
+  git(main, 'worktree', 'add', '-b', 'codex-wt', wtNested);
+
+  // unregistered folder
+  fs.mkdirSync(path.join(claudeDir, 'ghost'));
+
+  const entries = await g.listWorktrees(GIT, main);
+  const orphans = await g.findUnregistered(main, entries.map((e) => e.path));
+  const paths = orphans.map((o) => o.path);
+  assert.deepEqual(paths, [path.join(claudeDir, 'ghost')]);
+  assert.equal(orphans[0].folder.folder, '.claude/worktrees');
+  // 'abc' not flagged although the registered worktree is 'abc/repo'
+  assert.ok(!paths.includes(path.join(codexDir, 'abc')));
+
+  // missing source folder contributes nothing
+  fs.rmSync(claudeDir, { recursive: true, force: true });
+  const orphans2 = await g.findUnregistered(main, entries.map((e) => e.path));
+  assert.ok(!orphans2.some((o) => o.folder.folder === '.claude/worktrees'));
+});
+
+test('resolvePathTemplate: ${repo}, ${branch}, slash sanitization', () => {
+  assert.equal(
+    g.resolvePathTemplate('../${repo}.worktrees/${branch}', 'myapp', 'feature/login'),
+    '../myapp.worktrees/feature-login',
+  );
+  assert.equal(g.resolvePathTemplate('${branch}', 'r', 'x'), 'x');
+});
+
+test('addLocationCandidates: Default first, then only existing source folders', async (t) => {
+  const main = makeRepo(t);
+  const tpl = '../${repo}.worktrees/${branch}';
+
+  let cands = await g.addLocationCandidates('repo', main, tpl, 'feat/x');
+  assert.deepEqual(cands, [{ label: 'Default', wtPath: '../repo.worktrees/feat-x' }]);
+
+  fs.mkdirSync(path.join(main, '.claude/worktrees'), { recursive: true });
+  cands = await g.addLocationCandidates('repo', main, tpl, 'feat/x');
+  assert.deepEqual(cands, [
+    { label: 'Default', wtPath: '../repo.worktrees/feat-x' },
+    { label: '.claude/worktrees', wtPath: '.claude/worktrees/feat-x' },
+  ]);
+});

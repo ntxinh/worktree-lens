@@ -179,3 +179,75 @@ export async function removeWorktree(
 export async function pruneWorktrees(gitPath: string, mainPath: string): Promise<void> {
   await runGit(gitPath, mainPath, ['worktree', 'prune']);
 }
+
+/** First source folder F such that the worktree path is inside main/F. */
+export function classifySource(mainPath: string, wtPath: string): SourceFolder | undefined {
+  const rel = path.relative(mainPath, wtPath);
+  return SOURCE_FOLDERS.find((s) => rel.startsWith(s.folder + path.sep));
+}
+
+/**
+ * Immediate subdirectories of each existing source folder that no registered
+ * worktree (realpath-compared) equals or is nested inside.
+ */
+export async function findUnregistered(
+  mainPath: string,
+  registeredPaths: string[],
+): Promise<{ folder: SourceFolder; path: string }[]> {
+  const registered = registeredPaths.map(realpathSafe);
+  const out: { folder: SourceFolder; path: string }[] = [];
+  for (const s of SOURCE_FOLDERS) {
+    const dir = path.join(mainPath, s.folder);
+    let subs: string[];
+    try {
+      subs = (await fsp.readdir(dir, { withFileTypes: true }))
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name);
+    } catch {
+      continue; // missing folder or permission error → contributes nothing
+    }
+    for (const name of subs) {
+      const abs = path.join(dir, name);
+      const real = realpathSafe(abs);
+      const isRegistered = registered.some((p) => p === real || p.startsWith(real + path.sep));
+      if (!isRegistered) out.push({ folder: s, path: abs });
+    }
+  }
+  return out;
+}
+
+function realpathSafe(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return p;
+  }
+}
+
+/** `${repo}` → repo name; `${branch}` → branch with '/' replaced by '-'. */
+export function resolvePathTemplate(template: string, repo: string, branch: string): string {
+  return template
+    .replace(/\$\{repo\}/g, repo)
+    .replace(/\$\{branch\}/g, branch.replace(/\//g, '-'));
+}
+
+/** 'Default' plus one entry per source folder that exists under the main worktree. */
+export async function addLocationCandidates(
+  repo: string,
+  mainPath: string,
+  template: string,
+  branch: string,
+): Promise<{ label: string; wtPath: string }[]> {
+  const out = [{ label: 'Default', wtPath: resolvePathTemplate(template, repo, branch) }];
+  const sanitized = branch.replace(/\//g, '-');
+  for (const s of SOURCE_FOLDERS) {
+    try {
+      if ((await fsp.stat(path.join(mainPath, s.folder))).isDirectory()) {
+        out.push({ label: s.folder, wtPath: `${s.folder}/${sanitized}` });
+      }
+    } catch {
+      // folder does not exist → skipped
+    }
+  }
+  return out;
+}
