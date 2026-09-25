@@ -87,3 +87,54 @@ test('listWorktrees + gitCommonDir against a real repo', async (t) => {
   const common = await g.gitCommonDir(GIT, wt);
   assert.equal(common, path.join(fs.realpathSync(main), '.git'));
 });
+
+test('resolveBase: main, master fallback, none', async (t) => {
+  const main = makeRepo(t);
+  assert.equal(await g.resolveBase(GIT, main), 'main');
+  git(main, 'branch', '-m', 'main', 'master');
+  assert.equal(await g.resolveBase(GIT, main), 'master');
+  git(main, 'branch', '-m', 'master', 'trunk');
+  assert.equal(await g.resolveBase(GIT, main), undefined);
+});
+
+test('getStatus: staged, ahead, unpushed without upstream', async (t) => {
+  const main = makeRepo(t);
+  const wt = path.join(path.dirname(main), 'repo.wt', 'feat');
+  git(main, 'worktree', 'add', '-b', 'feature', wt);
+
+  let s = await g.getStatus(GIT, wt, 'main');
+  assert.deepEqual(s, { staged: false, ahead: 0, unpushed: 0 });
+
+  // staged change
+  fs.writeFileSync(path.join(wt, 'f.txt'), 'changed\n');
+  git(wt, 'add', 'f.txt');
+  s = await g.getStatus(GIT, wt, 'main');
+  assert.equal(s.staged, true);
+  assert.equal(s.ahead, 0);
+
+  // commit → ahead of main, no longer staged
+  git(wt, 'commit', '-m', 'feat work');
+  s = await g.getStatus(GIT, wt, 'main');
+  assert.equal(s.staged, false);
+  assert.equal(s.ahead, 1);
+  assert.equal(s.unpushed, 0); // no upstream
+});
+
+test('getStatus: unpushed counted with a local bare remote as upstream', async (t) => {
+  const main = makeRepo(t);
+  const bare = path.join(path.dirname(main), 'remote.git');
+  git(path.dirname(main), 'init', '--bare', bare);
+  git(main, 'remote', 'add', 'origin', bare);
+  git(main, 'push', '-u', 'origin', 'main');
+
+  fs.writeFileSync(path.join(main, 'f.txt'), 'more\n');
+  git(main, 'commit', '-am', 'ahead of origin');
+  const s = await g.getStatus(GIT, main, 'main');
+  assert.equal(s.unpushed, 1);
+});
+
+test('getStatus: no base → ahead stays 0', async (t) => {
+  const main = makeRepo(t);
+  const s = await g.getStatus(GIT, main, undefined);
+  assert.equal(s.ahead, 0);
+});

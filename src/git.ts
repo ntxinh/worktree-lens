@@ -86,3 +86,53 @@ export async function gitCommonDir(gitPath: string, cwd: string): Promise<string
 export async function listWorktrees(gitPath: string, cwd: string): Promise<WorktreeEntry[]> {
   return parseWorktreeList(await runGit(gitPath, cwd, ['worktree', 'list', '--porcelain']));
 }
+
+/** First existing of main, master; undefined when neither exists. */
+export async function resolveBase(gitPath: string, cwd: string): Promise<string | undefined> {
+  for (const name of ['main', 'master']) {
+    try {
+      await runGit(gitPath, cwd, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`]);
+      return name;
+    } catch {
+      // try next
+    }
+  }
+  return undefined;
+}
+
+export interface WorktreeStatus {
+  staged: boolean;
+  ahead: number;
+  unpushed: number;
+}
+
+/** Each check fails silently into its zero value — a failure hides only its own indicator. */
+export async function getStatus(
+  gitPath: string,
+  wtPath: string,
+  base: string | undefined,
+): Promise<WorktreeStatus> {
+  const [staged, ahead, unpushed] = await Promise.all([
+    // `diff --cached --quiet` exits 1 exactly when staged changes exist;
+    // any other failure must hide the indicator, not turn it on.
+    new Promise<boolean>((resolve) => {
+      execFile(
+        gitPath,
+        ['diff', '--cached', '--quiet'],
+        { cwd: wtPath },
+        (err) => resolve(err !== null && err.code === 1),
+      );
+    }),
+    base
+      ? runGit(gitPath, wtPath, ['rev-list', '--count', `${base}..HEAD`]).then(
+          (n) => Number(n.trim()) || 0,
+          () => 0,
+        )
+      : Promise.resolve(0),
+    runGit(gitPath, wtPath, ['rev-list', '--count', '@{u}..HEAD']).then(
+      (n) => Number(n.trim()) || 0,
+      () => 0,
+    ),
+  ]);
+  return { staged, ahead, unpushed };
+}
