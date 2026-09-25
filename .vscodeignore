@@ -11,3 +11,4 @@ tsconfig.json
 mise.toml
 Makefile
 AGENTS.md
+.superpowers/**
