@@ -136,3 +136,46 @@ export async function getStatus(
   ]);
   return { staged, ahead, unpushed };
 }
+
+/** Remote entries keep the `origin/` prefix; remote HEAD symbolic refs are excluded. */
+export async function listBranches(
+  gitPath: string,
+  cwd: string,
+): Promise<{ local: string[]; remote: string[] }> {
+  const [l, r] = await Promise.all([
+    runGit(gitPath, cwd, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']),
+    runGit(gitPath, cwd, ['for-each-ref', '--format=%(refname:short)', 'refs/remotes']),
+  ]);
+  const lines = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean);
+  return { local: lines(l), remote: lines(r).filter((x) => !x.endsWith('/HEAD')) };
+}
+
+/**
+ * `newBranch` → `git worktree add -b <newBranch> <wtPath> <base ?? 'HEAD'>`.
+ * Otherwise → `git worktree add <wtPath> <branch>` (a remote-only short name
+ * makes git create the tracking local branch).
+ */
+export async function addWorktree(
+  gitPath: string,
+  mainPath: string,
+  wtPath: string,
+  opts: { newBranch?: string; branch?: string; base?: string },
+): Promise<void> {
+  const args = opts.newBranch
+    ? ['worktree', 'add', '-b', opts.newBranch, wtPath, opts.base ?? 'HEAD']
+    : ['worktree', 'add', wtPath, opts.branch!];
+  await runGit(gitPath, mainPath, args);
+}
+
+export async function removeWorktree(
+  gitPath: string,
+  mainPath: string,
+  wtPath: string,
+  force = false,
+): Promise<void> {
+  await runGit(gitPath, mainPath, ['worktree', 'remove', ...(force ? ['--force'] : []), wtPath]);
+}
+
+export async function pruneWorktrees(gitPath: string, mainPath: string): Promise<void> {
+  await runGit(gitPath, mainPath, ['worktree', 'prune']);
+}

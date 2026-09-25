@@ -138,3 +138,67 @@ test('getStatus: no base → ahead stays 0', async (t) => {
   const s = await g.getStatus(GIT, main, undefined);
   assert.equal(s.ahead, 0);
 });
+
+test('listBranches: local names; remote names keep prefix, HEAD excluded', async (t) => {
+  const main = makeRepo(t);
+  const bare = path.join(path.dirname(main), 'remote.git');
+  git(path.dirname(main), 'init', '--bare', bare);
+  git(main, 'remote', 'add', 'origin', bare);
+  git(main, 'push', '-u', 'origin', 'main');
+  git(main, 'remote', 'set-head', 'origin', 'main'); // creates origin/HEAD so the exclusion is exercised
+  git(main, 'branch', 'local-only');
+
+  const { local, remote } = await g.listBranches(GIT, main);
+  assert.ok(local.includes('main'));
+  assert.ok(local.includes('local-only'));
+  assert.ok(remote.includes('origin/main'));
+  assert.ok(!remote.some((r) => r.endsWith('/HEAD')));
+});
+
+test('addWorktree: new branch from base and existing branch', async (t) => {
+  const main = makeRepo(t);
+  const wtNew = path.join(path.dirname(main), 'repo.wt', 'new');
+  await g.addWorktree(GIT, main, wtNew, { newBranch: 'feat-new', base: 'main' });
+  let entries = await g.listWorktrees(GIT, main);
+  assert.equal(fs.realpathSync(entries.find((e) => e.branch === 'feat-new')!.path), fs.realpathSync(wtNew));
+
+  const wtOld = path.join(path.dirname(main), 'repo.wt', 'old');
+  git(main, 'branch', 'feat-old');
+  await g.addWorktree(GIT, main, wtOld, { branch: 'feat-old' });
+  entries = await g.listWorktrees(GIT, main);
+  assert.equal(fs.realpathSync(entries.find((e) => e.branch === 'feat-old')!.path), fs.realpathSync(wtOld));
+});
+
+test('removeWorktree: clean removed; dirty refused then forced', async (t) => {
+  const main = makeRepo(t);
+  const wt = path.join(path.dirname(main), 'repo.wt', 'feat');
+  git(main, 'worktree', 'add', '-b', 'feature', wt);
+
+  // dirty → refused
+  fs.writeFileSync(path.join(wt, 'dirty.txt'), 'x\n');
+  await assert.rejects(
+    () => g.removeWorktree(GIT, main, wt),
+    /modified or untracked/,
+  );
+  assert.ok(fs.existsSync(wt));
+
+  // forced → gone
+  await g.removeWorktree(GIT, main, wt, true);
+  assert.ok(!fs.existsSync(wt));
+  const entries = await g.listWorktrees(GIT, main);
+  assert.equal(entries.length, 1);
+});
+
+test('pruneWorktrees: prunes worktree whose folder was deleted', async (t) => {
+  const main = makeRepo(t);
+  const wt = path.join(path.dirname(main), 'repo.wt', 'feat');
+  git(main, 'worktree', 'add', '-b', 'feature', wt);
+  fs.rmSync(wt, { recursive: true, force: true });
+
+  let entries = await g.listWorktrees(GIT, main);
+  assert.equal(entries.find((e) => e.branch === 'feature')?.prunable, true);
+
+  await g.pruneWorktrees(GIT, main);
+  entries = await g.listWorktrees(GIT, main);
+  assert.equal(entries.length, 1);
+});
