@@ -137,6 +137,21 @@ export async function getStatus(
   return { staged, ahead, unpushed };
 }
 
+/**
+ * Days since the worktree folder was created (birthtime).
+ * Undefined when stat fails or the filesystem reports no birthtime —
+ * same silent-hide rule as the §5.3 checks.
+ */
+export async function getAgeDays(wtPath: string): Promise<number | undefined> {
+  try {
+    const b = (await fsp.stat(wtPath)).birthtimeMs;
+    if (!b) return undefined;
+    return Math.max(0, Math.floor((Date.now() - b) / 86_400_000));
+  } catch {
+    return undefined;
+  }
+}
+
 /** Remote entries keep the `origin/` prefix; remote HEAD symbolic refs are excluded. */
 export async function listBranches(
   gitPath: string,

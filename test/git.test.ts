@@ -139,6 +139,12 @@ test('getStatus: no base → ahead stays 0', async (t) => {
   assert.equal(s.ahead, 0);
 });
 
+test('getAgeDays: fresh dir is 0; stat failure is undefined', async (t) => {
+  const main = makeRepo(t);
+  assert.equal(await g.getAgeDays(main), 0);
+  assert.equal(await g.getAgeDays(path.join(main, 'does-not-exist')), undefined);
+});
+
 test('listBranches: local names; remote names keep prefix, HEAD excluded', async (t) => {
   const main = makeRepo(t);
   const bare = path.join(path.dirname(main), 'remote.git');

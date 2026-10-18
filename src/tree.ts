@@ -71,6 +71,7 @@ type RegisteredSpec = {
   entry: g.WorktreeEntry;
   source: g.SourceFolder | undefined;
   status: g.WorktreeStatus;
+  days: number | undefined;
   current: boolean;
   isMain: boolean;
 };
@@ -90,8 +91,7 @@ function makeWorktreeNode(
     const node = new WorktreeNode(label, repo, s.absPath, false, true);
     node.description = desc;
     node.tooltip = `${s.absPath}\nFolder exists, but git has no worktree registered here.`;
-    node.iconPath = new vscode.ThemeIcon('circle-slash');
-    node.contextValue = 'worktree.orphan';
+    node.iconPath = new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('descriptionForeground'));
     return node;
   }
 
@@ -105,6 +105,10 @@ function makeWorktreeNode(
       : [`${s.source.tag}  ${rel}`];
 
   const tip: string[] = [e.path];
+  if (s.days !== undefined) {
+    parts.push(`${s.days}d`);
+    tip.push(`Created ${s.days} day${s.days === 1 ? '' : 's'} ago`);
+  }
   if (e.prunable) {
     parts.push('missing');
     tip.push('Folder is missing; remove to prune the registration.');
@@ -138,14 +142,18 @@ function makeWorktreeNode(
         ? 'worktree.missing'
         : 'worktree';
   node.iconPath = e.prunable
-    ? new vscode.ThemeIcon('warning')
+    ? new vscode.ThemeIcon('warning', new vscode.ThemeColor('charts.yellow'))
     : e.locked
-      ? new vscode.ThemeIcon('lock')
-      : current
-        ? new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'))
-        : status.staged
-          ? new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('gitDecoration.modifiedResourceForeground'))
-          : new vscode.ThemeIcon('git-branch');
+      ? new vscode.ThemeIcon('lock', new vscode.ThemeColor('charts.orange'))
+      : s.isMain
+        ? new vscode.ThemeIcon('root-folder')
+        : current
+          ? new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'))
+          : status.staged
+            ? new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('gitDecoration.modifiedResourceForeground'))
+            : status.unpushed > 0
+              ? new vscode.ThemeIcon('cloud-upload', new vscode.ThemeColor('charts.blue'))
+              : new vscode.ThemeIcon('git-branch');
   return node;
 }
 
@@ -176,10 +184,18 @@ async function repoChildren(
   const base = await g.resolveBase(repo.gitPath, repo.mainPath);
 
   const statuses = new Map<string, g.WorktreeStatus>();
+  const ages = new Map<string, number | undefined>();
   await Promise.all(
     entries
       .filter((e) => !e.prunable)
-      .map(async (e) => statuses.set(e.path, await g.getStatus(repo.gitPath, e.path, base))),
+      .map(async (e) => {
+        const [status, days] = await Promise.all([
+          g.getStatus(repo.gitPath, e.path, base),
+          g.getAgeDays(e.path),
+        ]);
+        statuses.set(e.path, status);
+        ages.set(e.path, days);
+      }),
   );
   const zero: g.WorktreeStatus = { staged: false, ahead: 0, unpushed: 0 };
 
@@ -189,6 +205,7 @@ async function repoChildren(
       entry: entries[0],
       source: undefined,
       status: statuses.get(entries[0].path) ?? zero,
+      days: ages.get(entries[0].path),
       current: repo.openFolders.has(realpathSafe(entries[0].path)),
       isMain: true,
     },
@@ -210,6 +227,7 @@ async function repoChildren(
         entry: e,
         source,
         status: statuses.get(e.path) ?? zero,
+        days: ages.get(e.path),
         current: repo.openFolders.has(realpathSafe(e.path)),
         isMain: false,
       },

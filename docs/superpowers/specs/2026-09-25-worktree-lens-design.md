@@ -21,8 +21,8 @@ worktrees and surfaces folders an agent left behind unregistered.
 ### Success criteria
 
 - Every worktree of every open repo is visible in one view, grouped by repo.
-- Each worktree shows: current (`@`), staged changes (`+`), commits ahead of
-  main (`↑N`), unpushed commits (`⇡`).
+- Each worktree shows: age (`Nd`), current (`@`), staged changes (`+`),
+  commits ahead of main (`↑N`), unpushed commits (`⇡`).
 - Add, open, open in new window, remove, and refresh are each reachable from the
   view with one click (plus prompts).
 - Worktrees in the agent source folders (§5.4) are grouped by folder (or tagged,
@@ -165,7 +165,7 @@ worktree.
 ### 5.3 Status checks (cwd = the worktree path)
 
 | Indicator | Command | Shown when |
-|---|---|---|
+| `Nd` | `stat` birthtime of the worktree folder | N days since creation (`0d` today); hidden when stat fails or the filesystem has no birthtime |
 | `+` | `git diff --cached --quiet` | exit code 1 |
 | `↑N` | `git rev-list --count <base>..HEAD` | N > 0; hidden if no base |
 | `⇡` | `git rev-list --count @{u}..HEAD` | count > 0; hidden on any failure (no upstream, detached) |
@@ -219,19 +219,21 @@ entry count, icon from §5.4, collapsible state `Collapsed`.
 
 - **Label:** branch name; detached → `(detached) <7-char sha>`; unregistered →
   folder name.
-- **Description**, then indicators in the order `@ + ↑N ⇡`, separated by two
-  spaces:
+- **Description**: the path part, then `Nd`, then indicators in the order
+  `@ + ↑N ⇡`, separated by two spaces:
   - own or main worktree (either mode): path relative to the main worktree
     (`.` for the main worktree itself). Example:
-    `../myapp.worktrees/feature-login  @  +  ↑1  ⇡`.
-  - sourced, grouped mode: folder name only. Example: `fix-auth  ↑3`.
+    `../myapp.worktrees/feature-login  3d  @  +  ↑1  ⇡`.
+  - sourced, grouped mode: folder name only. Example: `fix-auth  2d  ↑3`.
   - sourced, flat mode: tag, then path relative to the main worktree. Example:
-    `claude  .claude/worktrees/fix-auth  ↑3`.
-  - prunable: the path part above, then `missing` (no indicators).
-  - unregistered: the path part above, then `unregistered` (no indicators).
-- **Tooltip:** absolute path, then one line per active indicator in words
-  (e.g. "2 commits ahead of main", "Has staged changes"). Unregistered: "Folder
-  exists, but git has no worktree registered here."
+    `claude  .claude/worktrees/fix-auth  5d  ↑3`.
+  - prunable: the path part above, then `missing` (no `Nd`, no indicators).
+  - unregistered: the path part above, then `unregistered` (no `Nd`, no
+    indicators).
+- **Tooltip:** absolute path, then `Created N days ago`, then one line per
+  active indicator in words (e.g. "2 commits ahead of main", "Has staged
+  changes"). Unregistered: "Folder exists, but git has no worktree registered
+  here."
 - **Icon (first match wins):**
   1. prunable → `warning`
   2. unregistered → `circle-slash`
@@ -371,8 +373,9 @@ env vars). Asserts:
 
 - Porcelain parser: main + linked worktree, branch names, detached, bare,
   locked, prunable.
-- Status: staged change detected; `↑N` counts commits beyond `main`; `⇡` hidden
-  with no upstream and counted with a local bare remote as upstream.
+- Status: `Nd` day count from folder birthtime; staged change detected; `↑N`
+  counts commits beyond `main`; `⇡` hidden with no upstream and counted with a
+  local bare remote as upstream.
 - Remove: clean worktree removed; dirty worktree refused with the
   "contains modified or untracked files" message, then removed with force.
 - Add: new branch from `main`; existing branch.

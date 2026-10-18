@@ -4,6 +4,21 @@
   "description": "All Git worktree actions one click away in a Source Control tree view, with at-a-glance status per worktree.",
   "version": "0.1.0",
   "publisher": "exodia",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#1F2937",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ntxinh/worktree-lens.git"
+  },
+  "keywords": [
+    "git",
+    "worktree",
+    "worktrees",
+    "scm"
+  ],
   "license": "MIT",
   "engines": {
     "vscode": "^1.90.0"
@@ -38,8 +53,7 @@
     },
     "viewsWelcome": [
       {
-        "view": "worktreeLens",
-        "contents": "No Git repositories open."
+        "contents": "No Git repositories open.\nOpen a folder containing a Git repository."
       }
     ],
     "configuration": {

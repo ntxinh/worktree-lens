@@ -1,3 +1,5 @@
+<p align="center"><img src="images/icon.png" width="128" alt="Worktree Lens icon"></p>
+
 # Worktree Lens
 
 A VS Code extension that puts every Git worktree action one click away in a
@@ -10,8 +12,8 @@ Marketplace.
 ## Features
 
 - Every worktree of every open repo in one view, grouped by repo.
-- Status per worktree: current (`@`), staged changes (`+`), commits ahead of
-  main (`↑N`), unpushed commits (`⇡`).
+- Status per worktree: age (`Nd`), current (`@`), staged changes (`+`),
+  commits ahead of main (`↑N`), unpushed commits (`⇡`).
 - One-click add, open, open in new window, remove, refresh.
 - Agent worktree folders (`.claude/worktrees`, `.codex/worktrees`,
   `.github/worktrees`, `.agents/worktrees`, `.worktrees`) are grouped by

@@ -12,3 +12,4 @@ mise.toml
 Makefile
 AGENTS.md
 .superpowers/**
+images/*.svg
